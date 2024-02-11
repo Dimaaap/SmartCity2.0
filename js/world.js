@@ -20,8 +20,30 @@ class World {
         this.roadBorders = [];
         this.buildings = [];
         this.trees = [];
+        this.laneGuides = [];
 
+        this.markings = [];
         this.generate();
+    }
+
+    static load(info){
+        const world = new World(new Graph());
+        world.graph = Graph.load(info.graph);
+        world.roadWidth = info.roadWidth;
+        world.roadRoundness = info.roadRoundness;
+        world.buildingWidth = info.buildingWidth;
+        world.buildingMinLength = info.buildingMinLength;
+        world.spacing = info.spacing;
+        world.treeSize = info.treeSize; 
+        world.envelopes = info.envelopes.map((e) => Envelope.load(e));
+        world.roadBorders = info.roadBorders.map((b) => new Segment(b.p1, b.p2));
+        world.buildings = info.buildings.map((e) => Building.load(e));
+        world.trees = info.trees.map((t) => new Tree(t.center, info.treeSize));
+        world.laneGuides = info.laneGuides.map((g) => new Segment(g.p1, g.p2));
+        world.markings = info.markings.map((m) => Marking.load(m));
+        world.zoom = info.zoom;
+        world.offset = info.offset;
+        return world;
     }
 
     generate(){
@@ -35,6 +57,24 @@ class World {
         this.roadBorders = Polygon.union(this.envelopes.map((e) => e.poly));
         this.buildings = this.#generateBuildings();
         this.trees = this.#generateTrees();
+
+        this.laneGuides.length = 0;
+        this.laneGuides.push(...this.#generateLaneGuides());
+    }
+
+    #generateLaneGuides() {
+        const tmpEnvelopes = [];
+        for(const seg of this.graph.segments){
+            tmpEnvelopes.push(
+                new Envelope(
+                    seg,
+                    this.roadWidth / 2,
+                    this.roadRoundness
+                )
+            );
+        }
+        const segments = Polygon.union(tmpEnvelopes.map((e) => e.poly));
+        return segments;
     }
 
     #generateTrees(){
@@ -165,6 +205,10 @@ class World {
             env.draw(ctx, { fill: "#BBB", stroke: "#BBB", lineWidth: 15 });
         } 
 
+        for(const marking of this.markings){
+            marking.draw(ctx);
+        }
+
         for(const seg of this.graph.segments){
             seg.draw(ctx, {color: "white", width: 4, dash: [10, 10] });
         }
@@ -173,12 +217,15 @@ class World {
             seg.draw(ctx, {color: "white", width: 4});
         }
 
-        for(const tree of this.trees){
-            tree.draw(ctx, viewPoint);
-        }
+        const items = [...this.buildings, ...this.trees];
+        items.sort(
+            (a, b) => 
+                b.base.distanceToPoint(viewPoint) - 
+                a.base.distanceToPoint(viewPoint)
+        );
 
-        for( const bld of this.buildings){
-            bld.draw(ctx, viewPoint);
+        for(const item of items){
+            item.draw(ctx, viewPoint);
         }
     }
 }
